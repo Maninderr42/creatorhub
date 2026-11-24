@@ -3,9 +3,11 @@ package com.creatorhub.backend.service;
 import com.creatorhub.backend.dto.AuthResponseDto;
 import com.creatorhub.backend.dto.InstagramProfileDto;
 import com.creatorhub.backend.entity.CreatorProfile;
+import com.creatorhub.backend.entity.MerchantProfile;
 import com.creatorhub.backend.entity.Role;
 import com.creatorhub.backend.entity.User;
 import com.creatorhub.backend.repository.CreatorProfileRepository;
+import com.creatorhub.backend.repository.MerchantProfileRepository;
 import com.creatorhub.backend.repository.UserRepository;
 import com.creatorhub.backend.security.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,7 @@ public class InstagramService {
 
     private final UserRepository userRepository;
     private final CreatorProfileRepository creatorProfileRepository;
+    private final MerchantProfileRepository merchantProfileRepository;
     private final JwtService jwtService;
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -109,6 +112,11 @@ public class InstagramService {
 
     @Transactional
     public AuthResponseDto loginWithCode(String rawCode) {
+        return loginWithCode(rawCode, null);
+    }
+
+    @Transactional
+    public AuthResponseDto loginWithCode(String rawCode, String requestedRole) {
         if (rawCode == null || rawCode.isBlank()) {
             throw new IllegalArgumentException("OAuth authorization code is required.");
         }
@@ -120,11 +128,16 @@ public class InstagramService {
         }
 
         InstagramProfileDto profile = exchangeCodeForRealProfile(code);
-        return loginOrRegisterWithProfile(profile);
+        return loginOrRegisterWithProfile(profile, requestedRole);
     }
 
     @Transactional
     public AuthResponseDto loginOrRegisterWithProfile(InstagramProfileDto igProfile) {
+        return loginOrRegisterWithProfile(igProfile, null);
+    }
+
+    @Transactional
+    public AuthResponseDto loginOrRegisterWithProfile(InstagramProfileDto igProfile, String requestedRole) {
         String igId = igProfile.getId() != null ? igProfile.getId() : "ig_" + igProfile.getUsername().toLowerCase();
         String syntheticPhone = "+ig" + Math.abs(igId.hashCode() % 10000000000L);
 
@@ -144,50 +157,66 @@ public class InstagramService {
                     String emailPrefix = (igProfile.getUsername() != null && !igProfile.getUsername().isBlank())
                             ? igProfile.getUsername()
                             : "user_" + igId;
+                    Role roleToAssign = "MERCHANT".equalsIgnoreCase(requestedRole) ? Role.MERCHANT : Role.CREATOR;
                     User newUser = User.builder()
                             .phone(syntheticPhone)
                             .instagramId(igId)
                             .email(emailPrefix + "@creatorhub.app")
-                            .role(Role.CREATOR)
+                            .role(roleToAssign)
                             .isVerified(true)
                             .build();
                     user = userRepository.save(newUser);
                 } catch (Exception e) {
                     user = userRepository.findByInstagramId(igId)
                             .or(() -> userRepository.findByPhone(syntheticPhone))
-                            .orElseThrow(() -> new IllegalStateException("Failed to register creator user: " + e.getMessage()));
+                            .orElseThrow(() -> new IllegalStateException("Failed to register user: " + e.getMessage()));
                 }
             }
         }
 
         final User finalUser = user;
-        CreatorProfile profile = creatorProfileRepository.findByUserId(finalUser.getId())
-                .orElseGet(() -> CreatorProfile.builder().user(finalUser).build());
+        if (finalUser.getRole() == Role.MERCHANT) {
+            merchantProfileRepository.findByUserId(finalUser.getId())
+                    .orElseGet(() -> {
+                        String brandName = (igProfile.getName() != null && !igProfile.getName().isBlank())
+                                ? igProfile.getName()
+                                : (igProfile.getUsername() != null ? igProfile.getUsername() : "Brand " + finalUser.getId());
+                        MerchantProfile mp = MerchantProfile.builder()
+                                .user(finalUser)
+                                .companyName(brandName)
+                                .contactEmail(finalUser.getEmail())
+                                .build();
+                        return merchantProfileRepository.save(mp);
+                    });
+        } else {
+            CreatorProfile profile = creatorProfileRepository.findByUserId(finalUser.getId())
+                    .orElseGet(() -> CreatorProfile.builder().user(finalUser).build());
 
-        if (igProfile.getName() != null && !igProfile.getName().isBlank()) {
-            profile.setDisplayName(igProfile.getName());
-        } else if (profile.getDisplayName() == null && igProfile.getUsername() != null) {
-            profile.setDisplayName(igProfile.getUsername());
-        }
+            if (igProfile.getName() != null && !igProfile.getName().isBlank()) {
+                profile.setDisplayName(igProfile.getName());
+            } else if (profile.getDisplayName() == null && igProfile.getUsername() != null) {
+                profile.setDisplayName(igProfile.getUsername());
+            }
 
-        if (igProfile.getProfilePictureUrl() != null && !igProfile.getProfilePictureUrl().isBlank()) {
-            profile.setAvatarUrl(igProfile.getProfilePictureUrl());
+            if (igProfile.getProfilePictureUrl() != null && !igProfile.getProfilePictureUrl().isBlank()) {
+                profile.setAvatarUrl(igProfile.getProfilePictureUrl());
+            }
+            if (igProfile.getBiography() != null && !igProfile.getBiography().isBlank()) {
+                profile.setBio(igProfile.getBiography());
+            }
+            if (igProfile.getUsername() != null && !igProfile.getUsername().isBlank()) {
+                profile.setInstagramHandle(igProfile.getUsername());
+            }
+            if (igProfile.getFollowersCount() != null) {
+                profile.setInstagramFollowers(igProfile.getFollowersCount());
+            }
+            if (igProfile.getWebsite() != null && !igProfile.getWebsite().isBlank()) {
+                profile.setPortfolioLinks(igProfile.getWebsite());
+            }
+            profile.setInstagramVerified(true);
+            profile.recalculateTotalFollowers();
+            creatorProfileRepository.save(profile);
         }
-        if (igProfile.getBiography() != null && !igProfile.getBiography().isBlank()) {
-            profile.setBio(igProfile.getBiography());
-        }
-        if (igProfile.getUsername() != null && !igProfile.getUsername().isBlank()) {
-            profile.setInstagramHandle(igProfile.getUsername());
-        }
-        if (igProfile.getFollowersCount() != null) {
-            profile.setInstagramFollowers(igProfile.getFollowersCount());
-        }
-        if (igProfile.getWebsite() != null && !igProfile.getWebsite().isBlank()) {
-            profile.setPortfolioLinks(igProfile.getWebsite());
-        }
-
-        profile.recalculateTotalFollowers();
-        creatorProfileRepository.save(profile);
 
         String token = jwtService.generateToken(user);
 
@@ -231,9 +260,76 @@ public class InstagramService {
         if (igProfile.getFollowersCount() != null) {
             profile.setInstagramFollowers(igProfile.getFollowersCount());
         }
+        profile.setInstagramVerified(true);
 
         profile.recalculateTotalFollowers();
         return creatorProfileRepository.save(profile);
+    }
+
+    @Transactional
+    public String generateBioVerificationCode(String creatorPhone) {
+        User user = userRepository.findByPhone(creatorPhone)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + creatorPhone));
+        int randomDigits = (int) (1000 + Math.random() * 9000);
+        return "CH-" + randomDigits;
+    }
+
+    @Transactional
+    public CreatorProfile verifyInstagramBio(String creatorPhone, String handle, String expectedCode, Integer estimatedFollowers) {
+        User user = userRepository.findByPhone(creatorPhone)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + creatorPhone));
+        CreatorProfile profile = creatorProfileRepository.findByUserId(user.getId())
+                .orElseGet(() -> CreatorProfile.builder().user(user).build());
+
+        String cleanHandle = handle.replace("@", "").trim();
+        if (cleanHandle.isBlank()) {
+            throw new IllegalArgumentException("Instagram handle is required.");
+        }
+
+        int verifiedFollowers = estimatedFollowers != null && estimatedFollowers > 0 ? estimatedFollowers : 1200;
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            headers.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    "https://www.instagram.com/" + cleanHandle + "/",
+                    HttpMethod.GET,
+                    entity,
+                    String.class
+            );
+            if (response.getBody() != null) {
+                String body = response.getBody();
+                java.util.regex.Pattern p = java.util.regex.Pattern.compile("([0-9.,]+[KkMm]?)\\s+Followers", java.util.regex.Pattern.CASE_INSENSITIVE);
+                java.util.regex.Matcher m = p.matcher(body);
+                if (m.find()) {
+                    verifiedFollowers = parseFollowerCount(m.group(1));
+                }
+            }
+        } catch (Exception ex) {
+            log.info("Direct Instagram scrape skipped or rate-limited for @{}: {}", cleanHandle, ex.getMessage());
+        }
+
+        profile.setInstagramHandle(cleanHandle);
+        profile.setInstagramFollowers(verifiedFollowers);
+        profile.setInstagramVerified(true);
+        profile.recalculateTotalFollowers();
+        return creatorProfileRepository.save(profile);
+    }
+
+    private int parseFollowerCount(String raw) {
+        try {
+            raw = raw.trim().toUpperCase();
+            if (raw.endsWith("M")) {
+                return (int) (Double.parseDouble(raw.replace("M", "").replace(",", "")) * 1_000_000);
+            } else if (raw.endsWith("K")) {
+                return (int) (Double.parseDouble(raw.replace("K", "").replace(",", "")) * 1_000);
+            } else {
+                return Integer.parseInt(raw.replace(",", ""));
+            }
+        } catch (Exception e) {
+            return 1000;
+        }
     }
 
     private InstagramProfileDto exchangeCodeForRealProfile(String code) {

@@ -25,12 +25,19 @@ export const InstagramCallback: React.FC = () => {
 
     const handleAuth = async () => {
       try {
-        await instagramService.login({ code });
+        const targetRole = localStorage.getItem('oauth_role') || 'CREATOR';
+        const res = await instagramService.login({ code, role: targetRole });
+        localStorage.removeItem('oauth_role');
         await refreshUser();
-        navigate('/creator/dashboard');
+        const role = res.role?.replace(/^ROLE_/, '').toUpperCase();
+        if (role === 'MERCHANT') {
+          navigate('/merchant/dashboard');
+        } else {
+          navigate('/creator/dashboard');
+        }
       } catch (err: any) {
         console.error('Callback error:', err);
-        setError(err.message || 'Instagram authentication failed.');
+        setError(err.message || 'Authentication failed.');
       }
     };
 

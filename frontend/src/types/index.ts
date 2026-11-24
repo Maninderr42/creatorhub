@@ -39,6 +39,7 @@ export interface CreatorProfile {
   categories?: string;
   instagramHandle?: string;
   instagramFollowers?: number;
+  isInstagramVerified?: boolean;
   youtubeHandle?: string;
   youtubeSubscribers?: number;
   tiktokHandle?: string;

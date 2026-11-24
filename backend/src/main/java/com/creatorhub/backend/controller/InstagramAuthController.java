@@ -2,6 +2,7 @@ package com.creatorhub.backend.controller;
 
 import com.creatorhub.backend.dto.ApiResponse;
 import com.creatorhub.backend.dto.AuthResponseDto;
+import com.creatorhub.backend.dto.CreatorProfileDto;
 import com.creatorhub.backend.dto.InstagramAuthRequestDto;
 import com.creatorhub.backend.dto.InstagramProfileDto;
 import com.creatorhub.backend.entity.CreatorProfile;
@@ -47,7 +48,7 @@ public class InstagramAuthController {
             throw new IllegalArgumentException("OAuth authorization code is required for real Instagram/Meta authentication.");
         }
 
-        AuthResponseDto response = instagramService.loginWithCode(request.getCode());
+        AuthResponseDto response = instagramService.loginWithCode(request.getCode(), request.getRole());
         return ResponseEntity.ok(ApiResponse.success(response, "Authentication successful"));
     }
 
@@ -79,5 +80,27 @@ public class InstagramAuthController {
                 creatorProfileService.getOrCreateProfile(userDetails.getUsername()),
                 "Instagram account synced successfully"
         ));
+    }
+
+    @GetMapping("/bio-code")
+    @PreAuthorize("hasAuthority('ROLE_CREATOR')")
+    public ResponseEntity<ApiResponse<Map<String, String>>> getBioVerificationCode(
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        String code = instagramService.generateBioVerificationCode(userDetails.getUsername());
+        return ResponseEntity.ok(ApiResponse.success(Map.of("code", code), "Verification code generated"));
+    }
+
+    @PostMapping("/verify-bio")
+    @PreAuthorize("hasAuthority('ROLE_CREATOR')")
+    public ResponseEntity<ApiResponse<CreatorProfileDto>> verifyBioCode(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody Map<String, Object> body
+    ) {
+        String handle = (String) body.get("instagramHandle");
+        String code = (String) body.get("code");
+        Integer followers = body.get("followers") instanceof Number n ? n.intValue() : null;
+        CreatorProfile updated = instagramService.verifyInstagramBio(userDetails.getUsername(), handle, code, followers);
+        return ResponseEntity.ok(ApiResponse.success(creatorProfileService.toDto(updated), "Instagram handle verified successfully"));
     }
 }

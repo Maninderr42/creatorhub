@@ -81,6 +81,15 @@ export const InstagramLoginModal: React.FC<InstagramLoginModalProps> = ({ isOpen
               )}
             </div>
 
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 space-y-1">
+              <p className="font-bold flex items-center">
+                <span>ℹ️ Note: Requires Instagram Creator or Business Account</span>
+              </p>
+              <p>
+                Meta only authorizes live follower metrics for Professional (Creator/Business) accounts connected to your Facebook/Meta profile.
+              </p>
+            </div>
+
             <a
               href={authConfig.url}
               className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 hover:opacity-95 shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer"

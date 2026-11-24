@@ -25,6 +25,7 @@ public class CreatorProfileDto {
     private String categories;
     private String instagramHandle;
     private Integer instagramFollowers;
+    private boolean isInstagramVerified;
     private String youtubeHandle;
     private Integer youtubeSubscribers;
     private String tiktokHandle;

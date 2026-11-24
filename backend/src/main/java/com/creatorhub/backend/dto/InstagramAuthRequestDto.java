@@ -17,5 +17,6 @@ public class InstagramAuthRequestDto {
     private String biography;
     private Integer followersCount;
     private String avatarUrl;
+    private String role;
 }
 

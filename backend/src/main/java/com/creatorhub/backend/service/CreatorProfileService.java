@@ -253,6 +253,7 @@ public class CreatorProfileService {
                 .categories(profile.getCategories())
                 .instagramHandle(profile.getInstagramHandle())
                 .instagramFollowers(profile.getInstagramFollowers())
+                .isInstagramVerified(profile.isInstagramVerified())
                 .youtubeHandle(profile.getYoutubeHandle())
                 .youtubeSubscribers(profile.getYoutubeSubscribers())
                 .tiktokHandle(profile.getTiktokHandle())

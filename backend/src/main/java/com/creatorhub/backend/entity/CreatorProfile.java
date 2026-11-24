@@ -54,6 +54,10 @@ public class CreatorProfile {
     @Builder.Default
     private Integer instagramFollowers = 0;
 
+    @Column(name = "is_instagram_verified", nullable = false)
+    @Builder.Default
+    private boolean isInstagramVerified = false;
+
     @Column(name = "youtube_handle", length = 100)
     private String youtubeHandle;
 

@@ -452,9 +452,20 @@ export const MerchantCreatorDirectory: React.FC = () => {
                 {/* Social Breakdown */}
                 <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4">
                   {c.instagramHandle && (
-                    <div className="flex items-center space-x-1 text-slate-700">
-                      <Instagram className="w-3.5 h-3.5 text-pink-600" />
-                      <span className="truncate">@{c.instagramHandle}</span>
+                    <div className="flex items-center justify-between col-span-2 text-slate-700">
+                      <div className="flex items-center space-x-1 truncate">
+                        <Instagram className="w-3.5 h-3.5 text-pink-600 flex-shrink-0" />
+                        <span className="truncate font-medium">@{c.instagramHandle}</span>
+                      </div>
+                      {c.isInstagramVerified ? (
+                        <span className="inline-flex items-center text-[10px] font-bold text-emerald-700 bg-emerald-100/90 border border-emerald-300 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                          ✓ Verified
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium text-slate-400 flex-shrink-0">
+                          Self-reported
+                        </span>
+                      )}
                     </div>
                   )}
                   {c.youtubeHandle && (

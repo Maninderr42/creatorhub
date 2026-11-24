@@ -13,6 +13,7 @@ export interface InstagramLoginInput {
   followersCount?: number;
   biography?: string;
   avatarUrl?: string;
+  role?: string;
 }
 
 export const instagramService = {
@@ -33,5 +34,13 @@ export const instagramService = {
 
   async syncProfile(input: InstagramLoginInput): Promise<any> {
     return api.post('/auth/instagram/sync', input);
+  },
+
+  async getBioCode(): Promise<{ code: string }> {
+    return api.get<{ code: string }>('/auth/instagram/bio-code');
+  },
+
+  async verifyBioCode(instagramHandle: string, code: string, followers?: number): Promise<any> {
+    return api.post('/auth/instagram/verify-bio', { instagramHandle, code, followers });
   }
 };
